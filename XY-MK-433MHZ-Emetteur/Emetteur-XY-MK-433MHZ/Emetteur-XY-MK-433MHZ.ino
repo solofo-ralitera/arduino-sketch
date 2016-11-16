@@ -9,7 +9,7 @@
 
 const int TransmitterPin = 12;
 const int PotarPin = A0;
-int ValueToSend;
+String ValueToSend = "";
 
 char Message[VW_MAX_MESSAGE_LEN]; 
 
@@ -18,13 +18,16 @@ void setup() {
   vw_set_tx_pin(TransmitterPin);
   vw_setup(4000);// speed of data transfer Kbps
 }
-
+int i = 0;
 void loop(){
-  ValueToSend = analogRead(PotarPin);
+  i++;
+  ValueToSend = "Hello Solofo - " +(String) i;
+  char charBuf[50];
+  ValueToSend.toCharArray(charBuf, 50);
 
   // convertion de l'int en tableau de char 
-  itoa(ValueToSend, Message, 10);  // 10 car décimal
-  vw_send((uint8_t *)Message, strlen(Message));
+  //itoa(ValueToSend, Message, 10);  // 10 car décimal
+  vw_send((uint8_t *)charBuf, strlen(charBuf));
   vw_wait_tx(); // Wait until the whole message is gone
 
   delay(200);

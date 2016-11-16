@@ -6,7 +6,6 @@
 #include <VirtualWire.h>
 
 const int RecieverPin = 12;
-const int LedPin = A0;
 
 int Nombre;
 char Message[VW_MAX_MESSAGE_LEN]; 
@@ -14,7 +13,6 @@ char Message[VW_MAX_MESSAGE_LEN];
 void setup()
 {
   Serial.begin(9600);
-  pinMode(LedPin, OUTPUT);
     
   vw_set_ptt_inverted(true); // Required for DR3100
   vw_set_rx_pin(RecieverPin);
@@ -37,9 +35,8 @@ void loop()
     Message[buflen] = '\0';
 
     // Conversion du tableau de chars en int:
-    Nombre = atoi(Message);
+    String s = Message;
     
-    analogWrite(LedPin, Nombre/4);
-    Serial.println(Nombre / 4);
+    Serial.println(s);
   }
 }
