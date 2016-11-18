@@ -18,11 +18,16 @@
 String TEXT_BOTTOM_LEFT = "";
 String TEXT_BOTTOM_CENTER = "";
 String TEXT_BOTTOM_RIGHT = "";
+String TEXT_RIGHT_BOTTOM = "";
+String TEXT_RIGHT_TOP = "";
 
 U8GLIB_SH1106_128X64 oled(4, 5, 6, 7);   // SW SPI Com: SCK = 4, MOSI = 5, CS = 6, A0 = 7
-String oledStr1 = "Hello world !!!";
+String oledStr1 = "";
 String oledStr2 = "";
 String oledStr3 = "";
+String oledStr4 = "";
+String oledStr5 = "";
+String oledStr6 = "";
 
 // Current activ item for BTN_LEFT_TOP
 byte CurrentChannel = 0;
@@ -47,25 +52,24 @@ void oledDraw(String str, int x = 0, int y = 10) {
 
 short getBtn() {
   short U = analogRead(BUTTON_PIN);
-  //oledStr3 = (String) U;
   // BTN BOTTOM-LEFT
-  if (U >= 505 && U <= 515) {
+  if (U >= 510 && U <= 512) {
     return BTN_BOTTOM_LEFT;
   }
   // BTN BOTTOM-CENTRE
-  else if (U >= 813 && U <= 823) {
+  else if (U >= 818 && U <= 819) {
     return BTN_BOTTOM_CENTRE;
   }
   // BTN BOTTOM-RIGHT
-  else if (U >= 675 && U <= 685) {
+  else if (U >= 681 && U <= 682) {
     return BTN_BOTTOM_RIGHT;
   }
   // BTN RIGHT-BOTTOM
-  else if (U >= 762 && U <= 772) {
+  else if (U >= 767 && U <= 768) {
     return BTN_RIGHT_BOTTOM;
   }
   // BTN RIGHT-TOP
-  else if (U >= 847 && U <= 857) {
+  else if (U >= 852 && U <= 853) {
     return BTN_RIGHT_TOP;
   }
   // BTN LEFT-TOP
@@ -76,17 +80,32 @@ short getBtn() {
 }
 
 void resetTxtBtn() {
-  oledStr1 = "";
-  oledStr2 = "";
-  oledStr3 = "";
-
+  if(CurrentChannel <= 0) {
+    oledStr1 = "Hello world !!!";
+    oledStr2 = "";
+    oledStr3 = "Choose chanel with";
+    oledStr4 = "C0 button";
+    oledStr5 = "";
+    oledStr6 = "";
+  }else {
+    oledStr1 = "";
+    oledStr2 = "";
+    oledStr3 = "";
+    oledStr4 = "";
+    oledStr5 = "";
+    oledStr6 = "";
+  }
+  
   TEXT_BOTTOM_LEFT = "";
   TEXT_BOTTOM_CENTER = "";
-  TEXT_BOTTOM_RIGHT = "";  
-  
+  TEXT_BOTTOM_RIGHT = "";
+  TEXT_RIGHT_BOTTOM = "";
+  TEXT_RIGHT_TOP = "";
 }
 
 void setup() {
+  resetTxtBtn();
+  
   // put your setup code here, to run once:
   // assign default color value
   if ( oled.getMode() == U8G_MODE_R3G3B2 ) {
@@ -121,35 +140,84 @@ void transmitSignal() {
   vw_wait_tx();
 }
 
-char Message[VW_MAX_MESSAGE_LEN];
 void receiveSignal() {
   uint8_t buf[VW_MAX_MESSAGE_LEN];
   uint8_t buflen = VW_MAX_MESSAGE_LEN;
   if (vw_get_message(buf, &buflen)) {
     short i;
+    String action = "";
+    String params = "";
     for (i = 0; i < buflen; i++) {
+      // Channel code
       if(i == 0) {
         // not active module
         if(buf[i] != ChannelList[CurrentChannel]) {
           return;
         }
-      }else {
-        oledStr2 = "Ici " + (String) char(buf[i]);
-        Message[i] = char(buf[i]);
+      }
+      // Action code
+      else if(i == 1){
+        action = (String) char(buf[i]);
+      }
+      // Other params
+      else {
+        params += (String) char(buf[i]);
       }
     }
-    Message[buflen] = '\0';
-    manageSignal(Message);
+    manageSignal(action, params);
   }
 }
 
-void manageSignal(char* message) {
-  char dlm[] = "|";
-  char *pch = strtok(message, "|");
+void manageSignal(String action, String params) {
+  char charBuf[50];
+  params.toCharArray(charBuf, (params.length()+1));
+
+  //char dlm[] = "|";
+  char *pch = strtok(charBuf, "|");
+  short i = 0;
   while ( pch != NULL ) {
-      //oledStr2 += "-" + String(pch);
-      pch = strtok (NULL, dlm);
+    // Init menu
+    if(action == "m") {
+      if(i == 0) {
+        // Module title
+        oledStr1 = (String) pch;
+      } else if(i == 1) {
+        // Btn 1
+        TEXT_BOTTOM_LEFT = (String) pch;
+      } else if(i == 2) {
+        // Btn 2
+        TEXT_BOTTOM_CENTER = (String) pch;
+      } else if(i == 3) {
+        // Btn 3
+        TEXT_BOTTOM_RIGHT = (String) pch;
+      } else if(i == 4) {
+        TEXT_RIGHT_BOTTOM = (String) pch;
+      } else if(i == 5) {
+        TEXT_RIGHT_TOP = (String) pch;
+      }
+    }
+    // Acquisition
+    else if(action == "a") {
+      if(i == 0) {
+        oledStr2 = (String) pch;
+      } else if(i == 1) {
+        oledStr3 = (String) pch;
+      } else if(i == 2) {
+        oledStr4 = (String) pch;
+      } else if(i == 3) {
+        oledStr5 = (String) pch;
+      } else if(i == 4) {
+        oledStr6 = (String) pch;
+      }
+    }
+    pch = strtok (NULL, "|");
+    i++;
   }
+
+  //char *p, *i;
+  //p = strtok_r(message,"|",&i);
+  //oledStr1 = "-" + (String) atoi(message) + "-";
+  
 }
 
 void loop() {
@@ -163,7 +231,6 @@ void loop() {
     // catch button
     switch(CurrentButton) {
       case BTN_BOTTOM_LEFT:
-        
 
         // Transmit signal
         transmitSignal();
@@ -219,20 +286,25 @@ void loop() {
   do {
     // Main text
     // Top text (title)
-    oledStr1.toUpperCase();
+    //oledStr1.toUpperCase();
     oledDraw(oledStr1, 20, 10);
     // Second line
     oledDraw(oledStr2, 10, 20);
     // Third line
     oledDraw(oledStr3, 10, 28);
-
+    oledDraw(oledStr4, 10, 36);
+    oledDraw(oledStr5, 10, 44);
+    oledDraw(oledStr6, 10, 52);
+    
     // text for btn left
     oledDraw("C" + (String) CurrentChannel, 0, 10);
 
     // text for btn bottom
     oledDraw(TEXT_BOTTOM_LEFT, 0, 63);
     oledDraw(TEXT_BOTTOM_CENTER, 57, 63);
-    oledDraw(TEXT_BOTTOM_RIGHT, 114, 63);
+    oledDraw(TEXT_BOTTOM_RIGHT, 110, 63);
+    oledDraw(TEXT_RIGHT_BOTTOM, 114, 53);
+    oledDraw(TEXT_RIGHT_TOP, 114, 10);
 
   } while ( oled.nextPage() );
 }
