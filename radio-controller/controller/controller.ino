@@ -1,3 +1,24 @@
+/********************
+ * Controller with 7 buttons
+ * Btn 1 (Left top CX): 
+ *  - short press : switch between modules
+ *  - long press : reload current module
+ * Btn 2 (Left bottom |):
+ *  - short press : nextpage
+ *  - long press : oled on/off
+ * Other buttons : specific for each modules
+ *    Each press transimt message with following format:
+ *      2 digits:
+ *          digit 1 : current modules code
+ *          digit 2 : pressed button code
+ * Message received format:
+ *    digit 1 : module code which send the signal
+ *    alphanum char (len 1):
+ *      - m : code for initing module interface
+ *          Following format : m|MODULE TITLE+"|menu1|menu2|menu3|menu4|menu5
+ *      - a : to display message between line 2-6
+ *          Following format : a|line2|line3|line4|line5|line6
+ */
 #include <U8glib.h>
 #include <VirtualWire.h>
 
@@ -12,6 +33,7 @@
 #define BTN_RIGHT_BOTTOM    4
 #define BTN_RIGHT_TOP       5
 #define BTN_LEFT_TOP        6
+#define BTN_LEFT_BOTTOM     7
 #define BTN_NONE            0
 
 // Text button
@@ -28,13 +50,24 @@ String oledStr3 = "";
 String oledStr4 = "";
 String oledStr5 = "";
 String oledStr6 = "";
+String oledStr7 = "";
+String oledStr8 = "";
+String oledStr9 = "";
+String oledStr10 = "";
+String oledStr11 = "";
 
 // Current activ item for BTN_LEFT_TOP
 byte CurrentChannel = 0;
-char ChannelList[] = {0, 49, 50, 51, 52, 53};
+byte CurrentChannetInited = 0;
+const char ChannelList[] = {0, 49, 50, 51, 52, 53};
+
+// Oled current page displayed
+byte currentPage = 1;
 
 // Current / previous pressed button
 short CurrentButton = -1;
+
+unsigned long currentMillis = 0;
 
 void oledDraw(const char *str, int x = 0, int y = 10) {
   // graphic commands to redraw the complete screen should be placed here
@@ -72,6 +105,10 @@ short getBtn() {
   else if (U >= 852 && U <= 853) {
     return BTN_RIGHT_TOP;
   }
+  // BTN LEFT-BOTTOM
+  else if (U >= 806 && U <= 808) {
+    return BTN_LEFT_BOTTOM;
+  }
   // BTN LEFT-TOP
   else if (U <= 10) {
     return BTN_LEFT_TOP;
@@ -81,12 +118,18 @@ short getBtn() {
 
 void resetTxtBtn() {
   if(CurrentChannel <= 0) {
-    oledStr1 = "Hello world !!!";
-    oledStr2 = "";
-    oledStr3 = "Choose chanel with";
-    oledStr4 = "C0 button";
-    oledStr5 = "";
-    oledStr6 = "";
+    // Main help
+    oledStr1 = "  HELLO WORLD!!!";
+    oledStr2 = "Switch between chanel";
+    oledStr3 = "with Cx button, x is";
+    oledStr4 = "the activated channel.";
+    oledStr5 = "Long press reinit";
+    oledStr6 = "current channel.";
+    oledStr7 = "Short press P1 for";
+    oledStr8 = "switching between";
+    oledStr9 = "pages. Long press switch";
+    oledStr10 = "on/off screen.";
+    oledStr11 = "    ------------  ";
   }else {
     oledStr1 = "";
     oledStr2 = "";
@@ -94,6 +137,11 @@ void resetTxtBtn() {
     oledStr4 = "";
     oledStr5 = "";
     oledStr6 = "";
+    oledStr7 = "";
+    oledStr8 = "";
+    oledStr9 = "";
+    oledStr10 = "";
+    oledStr11 = "";
   }
   
   TEXT_BOTTOM_LEFT = "";
@@ -103,41 +151,23 @@ void resetTxtBtn() {
   TEXT_RIGHT_TOP = "";
 }
 
-void setup() {
-  resetTxtBtn();
-  
-  // put your setup code here, to run once:
-  // assign default color value
-  if ( oled.getMode() == U8G_MODE_R3G3B2 ) {
-    oled.setColorIndex(255);     // white
-  }
-  else if ( oled.getMode() == U8G_MODE_GRAY2BIT ) {
-    oled.setColorIndex(3);         // max intensity
-  }
-  else if ( oled.getMode() == U8G_MODE_BW ) {
-    oled.setColorIndex(1);         // pixel on
-  }
-  else if ( oled.getMode() == U8G_MODE_HICOLOR ) {
-    oled.setHiColorByRGB(255, 255, 255);
-  }
-  oled.setFont(u8g_font_5x7);
-  oled.setFontRefHeightExtendedText();
-
-  // Init transmitter
-  vw_set_ptt_inverted(true); //
-  vw_set_rx_pin(RECEIVER_PIN);
-  vw_set_tx_pin(TRANSMITTER_PIN);
-  vw_setup(4000);// speed of data transfer Kbps
-  vw_rx_start();
-}
-
 // Transmit btn pressed
+void transmitSignal(short btn) {
+  char charBuf[50];
+  String s = String(CurrentChannel) + "" + String(btn);
+  s.toCharArray(charBuf, 50);
+  vw_send((uint8_t *)charBuf, strlen(charBuf));
+  vw_wait_tx();
+}
 void transmitSignal() {
+  transmitSignal(CurrentButton);
+  /*
   char charBuf[50];
   String s = String(CurrentChannel) + "" + String(CurrentButton);
   s.toCharArray(charBuf, 50);
   vw_send((uint8_t *)charBuf, strlen(charBuf));
   vw_wait_tx();
+  */
 }
 
 void receiveSignal() {
@@ -169,7 +199,7 @@ void receiveSignal() {
 }
 
 void manageSignal(String action, String params) {
-  char charBuf[50];
+  char charBuf[params.length()+1];
   params.toCharArray(charBuf, (params.length()+1));
 
   //char dlm[] = "|";
@@ -178,6 +208,8 @@ void manageSignal(String action, String params) {
   while ( pch != NULL ) {
     // Init menu
     if(action == "m") {
+      // Channel inited
+      CurrentChannetInited = 1;
       if(i == 0) {
         // Module title
         oledStr1 = (String) pch;
@@ -220,62 +252,157 @@ void manageSignal(String action, String params) {
   
 }
 
-void loop() {
+void reloadChannel(short prevBtn) {
+  // Display page 1
+  currentPage = 1;
+  // Remove all button
+  resetTxtBtn();
+  // Loading
+  if(CurrentChannel > 0) {
+    oledStr1 = "Loading...";
+  }
+  CurrentChannetInited = 0;
+  // Connecting...;
+  // Transmit signal
+  // Loop until module repond and channel initialized
+  transmitSignal(prevBtn);
+}
 
+void setup() {
+  resetTxtBtn();
+  
+  // put your setup code here, to run once:
+  // assign default color value
+  if ( oled.getMode() == U8G_MODE_R3G3B2 ) {
+    oled.setColorIndex(255);     // white
+  }
+  else if ( oled.getMode() == U8G_MODE_GRAY2BIT ) {
+    oled.setColorIndex(3);         // max intensity
+  }
+  else if ( oled.getMode() == U8G_MODE_BW ) {
+    oled.setColorIndex(1);         // pixel on
+  }
+  else if ( oled.getMode() == U8G_MODE_HICOLOR ) {
+    oled.setHiColorByRGB(255, 255, 255);
+  }
+  oled.setFont(u8g_font_5x7);
+  oled.setFontRefHeightExtendedText();
+
+  // Init transmitter
+  vw_set_ptt_inverted(true); //
+  vw_set_rx_pin(RECEIVER_PIN);
+  vw_set_tx_pin(TRANSMITTER_PIN);
+  vw_setup(4000);// speed of data transfer Kbps
+  vw_rx_start();
+}
+
+void loop() {
+  currentMillis++;
+  
   // Skip si maintain btn
   if(CurrentButton == getBtn()) {
     // TODO : Btn maintained
   }
   else {
+    short prevBtn = CurrentButton;
     CurrentButton = getBtn();
+    short iInit = 0;
     // catch button
     switch(CurrentButton) {
       case BTN_BOTTOM_LEFT:
+        currentMillis = 0;
 
         // Transmit signal
         transmitSignal();
         break;
       case BTN_BOTTOM_CENTRE:
-        
+        currentMillis = 0;
         
         // Transmit signal
         transmitSignal();
         break;
       case BTN_BOTTOM_RIGHT:
-        
+        currentMillis = 0;
         
         // Transmit signal
         transmitSignal();
         break;
       case BTN_RIGHT_BOTTOM:
-        
+        currentMillis = 0;
         
         // Transmit signal
         transmitSignal();
         break;
       case BTN_RIGHT_TOP:
-        
+        currentMillis = 0;
         
         // Transmit signal
         transmitSignal();
         break;
       case BTN_LEFT_TOP:
-        // Swith channel
-        // TODO init choosed chanel
-        CurrentChannel++;
-        if(CurrentChannel >= sizeof(ChannelList)) CurrentChannel = 0;
-        resetTxtBtn();
-        
-        // Transmit signal
-        transmitSignal();
+        currentMillis = 0;
+        // Managed in BTN_NONE on release press
+        break;
+      case BTN_LEFT_BOTTOM:
+        currentMillis = 0;
+        // Managed in BTN_NONE on release press
         break;
       case BTN_NONE:
+        // MANAGE HERE ONRELEASE AND PRESS DURATION
+        // Short press
+        if(currentMillis < 10) {
+          switch(prevBtn) {
+            case BTN_LEFT_TOP:
+              // Swith channel
+              CurrentChannel++;
+              if(CurrentChannel >= sizeof(ChannelList)) CurrentChannel = 0;
+              reloadChannel(prevBtn);
+              break;
+            case BTN_LEFT_BOTTOM:
+              if(oled.getColorIndex() == 0) {
+                oled.setColorIndex(1);
+              }
+              else if(oledStr7 == "" && oledStr8 == "" && oledStr9 == "" && oledStr10 == "" && oledStr11 == "") {
+                // raf
+              }else {
+                currentPage++;
+                if(currentPage > 2){
+                  currentPage = 1;
+                }
+              }
+              break;
+            default:
+              // Transmit signal
+              transmitSignal();
+              break;
+          }
+        }
+        // long press
+        else if(currentMillis >= 10) {
+          switch(prevBtn) {
+            case BTN_LEFT_TOP:
+              // Reload channel without switching
+              reloadChannel(prevBtn);
+              break;
+            case BTN_LEFT_BOTTOM:
+              if(oled.getColorIndex() == 1) {
+                oled.setColorIndex(0);
+              }else {
+                oled.setColorIndex(1);
+              }
+              break;
+            default:
+              // Transmit signal
+              transmitSignal();
+              break;
+          }
+        }
+        currentMillis = 0;
       default:
-        
-        // Transmit signal
-        transmitSignal();
+        // TODO none
         break;
     }
+
   }
 
   // Receive signal
@@ -288,21 +415,31 @@ void loop() {
     // Top text (title)
     //oledStr1.toUpperCase();
     oledDraw(oledStr1, 20, 10);
-    // Second line
-    oledDraw(oledStr2, 10, 20);
-    // Third line
-    oledDraw(oledStr3, 10, 28);
-    oledDraw(oledStr4, 10, 36);
-    oledDraw(oledStr5, 10, 44);
-    oledDraw(oledStr6, 10, 52);
-    
+
+    // Page one
+    if(currentPage == 1) {
+      oledDraw(oledStr2, 15, 20);
+      oledDraw(oledStr3, 15, 28);
+      oledDraw(oledStr4, 15, 36);
+      oledDraw(oledStr5, 15, 44);
+      oledDraw(oledStr6, 15, 52);
+    }
+    // Page 2
+    else if(currentPage == 2) {
+      oledDraw(oledStr7, 15, 20);
+      oledDraw(oledStr8, 15, 28);
+      oledDraw(oledStr9, 15, 36);
+      oledDraw(oledStr10, 15, 44);
+      oledDraw(oledStr11, 15, 52);
+    }
     // text for btn left
     oledDraw("C" + (String) CurrentChannel, 0, 10);
+    oledDraw("P" + (String) currentPage, 0, 53);
 
     // text for btn bottom
-    oledDraw(TEXT_BOTTOM_LEFT, 0, 63);
+    oledDraw(TEXT_BOTTOM_LEFT, 5, 63);
     oledDraw(TEXT_BOTTOM_CENTER, 57, 63);
-    oledDraw(TEXT_BOTTOM_RIGHT, 110, 63);
+    oledDraw(TEXT_BOTTOM_RIGHT, 105, 63);
     oledDraw(TEXT_RIGHT_BOTTOM, 114, 53);
     oledDraw(TEXT_RIGHT_TOP, 114, 10);
 
